@@ -1,0 +1,4 @@
+streamlit>=1.42,<2
+python-docx>=1.1,<2
+pypdf>=5,<7
+tzdata>=2024.1

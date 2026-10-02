@@ -55,6 +55,7 @@ La configuración también admite `ORACLE_PAR_URL`, `FIRMANTE` y `CARGO_FIRMANTE
 - La extracción reconoce secciones numeradas de **obligaciones específicas** en minutas de prestación de servicios. No genera contenido ni usa un LLM. Si el documento es una imagen, requiere OCR previo o transcripción manual. PDF máximo: 20 MB y 150 páginas.
 - Las modificaciones se señalan para revisión. La aplicación no consolida automáticamente otrosíes, cesiones, suspensiones ni versiones de las obligaciones. El valor y las fechas vienen de la base maestra y las obligaciones del PDF elegido, que puede corresponder al contrato inicial.
 - Plazo contractual y fechas reportadas no equivalen a una certificación automática del tiempo efectivamente trabajado.
+- Si la duración es solo un número sin unidad, se muestra **unidad por confirmar**. No se sustituyen valores por columnas inferidas ni se asumen días o meses. El campo puede corregirse contra la minuta antes de descargar.
 - Cada cambio en la selección, fuente, campos, obligaciones o datos de expedición invalida la descarga previa y exige generar de nuevo.
 - Formato disponible: **DOCX**. No requiere Microsoft Word o LibreOffice en el servidor. No incluye firma electrónica ni expedición automática.
 
