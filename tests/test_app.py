@@ -16,7 +16,7 @@ PREPARED = {'documents': [], 'warnings': [], 'pdf': b'fixture-pdf',
 class AppTests(unittest.TestCase):
     def start(self):
         self.download = patch('src.network.download_oracle', return_value=csv_fixture())
-        self.preparation = patch('src.workflow.prepare', side_effect=lambda c: copy.deepcopy(PREPARED))
+        self.preparation = patch('src.workflow.prepare', side_effect=lambda c, **kwargs: copy.deepcopy(PREPARED))
         self.download.start(); self.preparation.start()
         self.addCleanup(self.download.stop); self.addCleanup(self.preparation.stop)
         at = AppTest.from_file(str(Path(__file__).resolve().parents[1] / 'app.py'), default_timeout=20)

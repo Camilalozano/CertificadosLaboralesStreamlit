@@ -1,6 +1,6 @@
 """Extrae solamente la sección de obligaciones específicas con página de origen.
 
-Adaptación del enfoque de Posmedia a minutas de prestación de servicios.
+Adaptación del enfoque de Posmedia a minutas y estudios previos.
 No usa un modelo generativo ni completa obligaciones ausentes.
 """
 import io
@@ -56,7 +56,9 @@ def extract(data):
     pages = pdf_pages(data)
     page_texts = []
     for n, page in enumerate(pages, 1):
-        page = re.sub(r'(?im)^\s*(?:Página\s+\d+\s+de\s+\d+|www\.agenciaatenea[^\n]*|Cr\.?\s*10[^\n]*|Carrera\s+10[^\n]*)\s*$', '', page)
+        # Retirar el folio aislado en los bordes, sin tocar la numeración de obligaciones.
+        page = re.sub(rf'\A\s*{n}\s*\n|\n\s*{n}\s*\Z', '', page)
+        page = re.sub(r'(?im)^\s*(?:Página\s+\d+\s+de\s+\d+|www\.agenciaatenea[^\n]*|Cr\.?\s*10[^\n]*|Carrera\s+10[^\n]*|PBX\s*:[^\n]*|atencionalciudadano@agenciaatenea\.gov\.co[^\n]*|Información:\s*Línea\s*195[^\n]*)\s*$', '', page)
         page_texts.append(f'[[PAGE:{n}]]\n{page}')
     joined = '\n'.join(page_texts)
     normalized, offsets = folded_offsets(joined)
@@ -64,10 +66,14 @@ def extract(data):
     sections = []
     for start in heading.finditer(normalized):
         tail = normalized[start.end():]
+        # Excluir obligaciones específicas de la Agencia u otros sujetos.
+        if re.match(r'\s*(?:DE\s+(?:LA|LAS|LOS)|DEL\s+(?!CONTRATISTA\b))', tail):
+            continue
         # Una cláusula distinta cierra la sección, nunca se añade a la última obligación.
-        ends = [m.start() for pattern in [r'\bCLAUSULA\s+[A-Z]',
-                r'\bOBLIGACIONES\s+DE\s+(?:LA\s+CONTRATANTE|LA\s+AGENCIA|LA\s+ENTIDAD)',
-                r'\b(?:C|D)\)\s+OBLIGACIONES', r'\bPARAGRAFO\s*[:.\-]']
+        ends = [m.start() for pattern in [r'\bCLAUSULA\s+(?:PRIMERA|SEGUNDA|TERCERA|CUARTA|QUINTA|SEXTA|SEPTIMA|OCTAVA|NOVENA|DECIMA|[IVX]+)\b\s*[:.\-–—]',
+                r'\bOBLIGACIONES\s+(?:ESPECIFICAS\s+)?DE\s+(?:LA\s+CONTRATANTE|LA\s+AGENCIA|LA\s+ENTIDAD)',
+                r'\b(?:C|D)\)\s+OBLIGACIONES', r'\bPARAGRAFO\s*[:.\-]',
+                r'(?m)^\s*(?:(?:\d+(?:\.\d+)*[.)]?|[A-Z][.)])\s+)?(?:MODALIDAD\s+DE\s+SELECCION|VALOR\s+(?:DEL|ESTIMADO)|FORMA\s+DE\s+PAGO|ANALISIS\s+(?:DEL|DE)|GARANTIAS|PRODUCTOS\s+ESPERADOS|PLAZO\s+DE\s+EJECUCION)\b']
                 if (m := re.search(pattern, tail))]
         end = start.end() + (min(ends) if ends else min(len(tail), 35000))
         begin_orig = offsets[start.end()] if start.end() < len(offsets) else len(joined)
@@ -98,7 +104,7 @@ def extract(data):
             warnings.append('La numeración contiene saltos o subapartados. Compare la extracción con el PDF.')
         sections.append(Extraction(obligations, clean(section), pages, warnings))
     if not sections:
-        raise SourceError('No se localizó una sección numerada de obligaciones específicas. Seleccione otra minuta o transcriba el texto del documento.')
+        raise SourceError('No se localizó una sección numerada de obligaciones específicas del contratista. Seleccione el soporte correspondiente al año o transcriba el texto del documento.')
     result = max(sections, key=lambda s: len(s.obligations))
     if len(sections) > 1:
         result.warnings.append('El PDF contiene varias secciones candidatas. Verifique cuál corresponde al contratista.')

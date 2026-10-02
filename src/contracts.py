@@ -39,6 +39,23 @@ def reference_key(value):
     return re.sub(r'[\s\-\u2010-\u2015\u2212]+', '', fold(value))
 
 
+def contract_year(contract):
+    """El año contractual se obtiene de la referencia, nunca del año de descarga."""
+    years = set(re.findall(r'(?<!\d)(20\d{2})(?!\d)', contract.fields['referencia']))
+    if len(years) == 1:
+        return int(years.pop()), 'referencia del contrato'
+    if len(years) > 1:
+        return None, 'referencia con varios años'
+    for value, origin in [
+        (contract.raw.get('fecha_de_firma (contratos_electronicos)'), 'fecha de firma'),
+        (contract.raw.get('año_inferido'), 'año reportado en la base'),
+    ]:
+        match = re.match(r'^(20\d{2})(?:\D|$)', text(value))
+        if match:
+            return int(match[1]), origin
+    return None, 'año no identificado'
+
+
 @dataclass
 class Contract:
     fields: dict

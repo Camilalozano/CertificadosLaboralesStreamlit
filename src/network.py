@@ -9,6 +9,14 @@ ORACLE_HOST = 'objectstorage.us-ashburn-1.oraclecloud.com'
 DOCUMENT_HOST = 'community.secop.gov.co'
 MAX_CSV_BYTES = 50 * 1024 * 1024
 MAX_PDF_BYTES = 20 * 1024 * 1024
+MAX_ZIP_BYTES = 50 * 1024 * 1024
+DOCUMENT_DATASETS = {
+    'dmgg-8hin': 'Desde 2025',
+    'nbae-kzan': 'Histórico 2024',
+    '3skv-9na7': 'Histórico 2023',
+    'kgcd-kt7i': 'Histórico 2022',
+    'f8va-cf4m': 'Histórico hasta 2021',
+}
 
 
 class SourceError(ValueError):
@@ -61,8 +69,10 @@ def download_oracle(url):
     return read_url(url.strip(), MAX_CSV_BYTES, 'Base Oracle')
 
 
-def api_rows(params):
-    endpoint = 'https://www.datos.gov.co/resource/dmgg-8hin.json'
+def api_rows(params, dataset='dmgg-8hin'):
+    if dataset not in DOCUMENT_DATASETS:
+        raise SourceError('La fuente documental de SECOP no está configurada.')
+    endpoint = f'https://www.datos.gov.co/resource/{dataset}.json'
     data = read_url(endpoint + '?' + urlencode(params), 8 * 1024 * 1024, 'Documentos SECOP')
     try:
         rows = json.loads(data)
@@ -79,4 +89,13 @@ def download_pdf(url):
     data = read_url(url, MAX_PDF_BYTES, 'Documento SECOP', {'Referer': 'https://community.secop.gov.co/'})
     if not data.lstrip().startswith(b'%PDF'):
         raise SourceError('SECOP no devolvió un archivo PDF legible.')
+    return data
+
+
+def download_zip(url):
+    if not allowed_url(url, DOCUMENT_HOST, '/Public/Archive/RetrieveFile/Index'):
+        raise SourceError('El archivo no tiene una URL de descarga válida de SECOP II.')
+    data = read_url(url, MAX_ZIP_BYTES, 'Archivo ZIP SECOP', {'Referer': 'https://community.secop.gov.co/'})
+    if not data.startswith(b'PK'):
+        raise SourceError('SECOP no devolvió un archivo ZIP válido.')
     return data

@@ -1,13 +1,13 @@
 # Certificaciones laborales y contractuales · ATENEA
 
-Aplicativo Streamlit para buscar contratos por número o palabras del objeto, recuperar su minuta desde SECOP II, extraer las obligaciones específicas y descargar un certificado editable en Word.
+Aplicativo Streamlit para buscar contratos por número o palabras del objeto, recuperar su minuta o estudios previos desde SECOP II según el año contractual, extraer las obligaciones específicas y descargar un certificado editable en Word.
 
 ## Uso
 
 1. Ingresa una referencia completa, un número corto o palabras del objeto y pulsa **Buscar contrato**.
 2. Si hay varias coincidencias, selecciona la referencia, el contratista y el ID correctos. Los duplicados se muestran por separado. Al seleccionar el contrato aparecen sus observaciones y la tabla de modificación reportada.
-3. Pulsa **Obtener obligaciones de SECOP**. La aplicación consulta los documentos asociados al `id_contrato` exacto y prioriza minutas y clausulados.
-4. Revisa los datos, el documento elegido y las obligaciones con su página de origen. Puedes seleccionar otro PDF, cargar una minuta o transcribir obligaciones. Las correcciones quedan en la trazabilidad.
+3. Revisa el año y la fuente indicada: **hasta 2025, minuta o clausulado; desde 2026, estudios previos**. Pulsa **Obtener obligaciones de SECOP**. Se consultan los archivos actuales e históricos y, cuando existe un vínculo único, los documentos precontractuales del proceso.
+4. Revisa los datos, el documento elegido y las obligaciones con su página de origen. Puedes seleccionar otro PDF o ZIP del tipo requerido, cargar un PDF o transcribir obligaciones desde el soporte correspondiente al año. Las correcciones quedan en la trazabilidad.
 5. Pulsa **Generar certificado Word** y después **Descargar certificado Word**. También puedes descargar la trazabilidad JSON y el PDF consultado.
 
 El formato conserva la estructura del generador original de ATENEA. La salida es un borrador para revisión y firma. No se presupone cédula de ciudadanía para todos los proveedores ni se incorpora automáticamente el nombre de un firmante.
@@ -50,10 +50,12 @@ La configuración también admite `ORACLE_PAR_URL`, `FIRMANTE` y `CARGO_FIRMANTE
 
 - **Base Oracle:** referencia contractual, ID SECOP, objeto, contratista, identificación, valor, fechas, plazo, estado y URL del proceso. Se leen como texto para preservar identificadores y ceros iniciales.
 - **Observaciones y modificación:** antes de obtener las obligaciones, se muestra una alerta con el texto completo de `observaciones_inferido` y una tabla con `tipo_modificacion`, `identificador_modificacion (modificaciones)`, `estado_modificacion (modificaciones)` y `fecha_de_aprobacion (modificaciones)`. Si no hay observaciones se informa su ausencia; los campos vacíos de la tabla muestran **Sin información**. Los valores corresponden a la fila seleccionada, no a un historial completo. Son información de consulta en pantalla y no se agregan al certificado Word.
-- **Documentos SECOP:** [Archivos Descarga Desde 2025, dmgg-8hin](https://www.datos.gov.co/Estad-sticas-Nacionales/SECOP-II-Archivos-Descarga-Desde-2025/dmgg-8hin). API: `https://www.datos.gov.co/resource/dmgg-8hin.json`. Consulta paginada con `n_mero_de_contrato = id_contrato`.
-- Las obligaciones no son una columna de esta fuente: se extraen del texto de los PDF descargados. La aplicación conserva el documento, su hash SHA-256 y la página de cada obligación.
-- Los contratos anteriores a 2025 pueden no tener documentos en este conjunto. Se permite cargar una minuta alternativa. No se consulta automáticamente un conjunto histórico diferente.
-- La extracción reconoce secciones numeradas de **obligaciones específicas** en minutas de prestación de servicios. No genera contenido ni usa un LLM. Si el documento es una imagen, requiere OCR previo o transcripción manual. PDF máximo: 20 MB y 150 páginas.
+- **Documentos SECOP:** se consultan [Desde 2025, dmgg-8hin](https://www.datos.gov.co/d/dmgg-8hin), [Histórico 2024, nbae-kzan](https://www.datos.gov.co/d/nbae-kzan), [Histórico 2023, 3skv-9na7](https://www.datos.gov.co/d/3skv-9na7), [Histórico 2022, kgcd-kt7i](https://www.datos.gov.co/d/kgcd-kt7i) y [Hasta 2021, f8va-cf4m](https://www.datos.gov.co/d/f8va-cf4m). Cada API sigue el patrón `https://www.datos.gov.co/resource/{dataset}.json`. Consulta paginada por `n_mero_de_contrato = id_contrato`, con deduplicación por documento.
+- **Estudios previos vinculados al proceso:** si los documentos del contrato identifican un solo `proceso`, también se consultan sus archivos precontractuales sin ID contractual. Los documentos asignados explícitamente a otro contrato se excluyen. Si alguna fuente falla, se informa que la consulta puede estar incompleta.
+- **Regla por año:** hasta 2025 se extrae de minutas o clausulados; desde 2026, de estudios previos. El año se toma primero de la referencia contractual, después de la fecha de firma y, en su ausencia, de `año_inferido`. Si no se puede identificar, la interfaz solicita confirmarlo. La fecha de carga del PDF no cambia la regla. Si falta el tipo de documento requerido, se ofrece carga o transcripción manual; no se sustituye automáticamente por el otro tipo.
+- Las obligaciones no son una columna de estas fuentes: se extraen del texto de los PDF descargados. La trazabilidad registra año, regla, conjunto de datos, asociación al contrato o proceso, documento, hash SHA-256 y página de cada obligación. Para ZIP, también registra el contenedor, su hash y la ruta interna del PDF.
+- **ZIP:** los estudios previos o minutas pueden estar dentro de carpetas comprimidas. Se leen en memoria únicamente los PDF del tipo requerido, sin extraer archivos al disco. Límites: ZIP de 50 MB, 500 entradas, 100 MB descomprimidos y hasta ocho PDF candidatos; no se abren ZIP anidados. Se revisan hasta cinco documentos o contenedores en la extracción automática.
+- La extracción reconoce secciones numeradas de **obligaciones específicas del contratista** en minutas y estudios previos. Cierra la sección antes de apartados como modalidad de selección y excluye las obligaciones específicas de la Agencia. Los contratos con estructura diferente, como obligaciones por literales de una entidad ejecutora, requieren revisión o transcripción manual. No genera contenido ni usa un LLM. Si el documento es una imagen, requiere OCR previo o transcripción manual. PDF máximo: 20 MB y 150 páginas.
 - Las modificaciones se señalan para revisión. La aplicación no consolida automáticamente otrosíes, cesiones, suspensiones ni versiones de las obligaciones. El valor y las fechas vienen de la base maestra y las obligaciones del PDF elegido, que puede corresponder al contrato inicial.
 - Plazo contractual y fechas reportadas no equivalen a una certificación automática del tiempo efectivamente trabajado.
 - Si la duración es solo un número sin unidad, se muestra **unidad por confirmar**. No se sustituyen valores por columnas inferidas ni se asumen días o meses. El campo puede corregirse contra la minuta antes de descargar.
@@ -71,7 +73,19 @@ La configuración también admite `ORACLE_PAR_URL`, `FIRMANTE` y `CARGO_FIRMANTE
 python -m unittest discover -s tests -v
 ```
 
-Las pruebas usan datos sintéticos y no necesitan Oracle ni documentos personales. Cubren búsqueda, ambigüedad, identificadores, valor monetario, fechas, documentos de otro contrato, paginación, límites de destino, sección de obligaciones, generación Word y flujo de Streamlit.
+Las pruebas usan datos sintéticos y no necesitan Oracle ni documentos personales. Cubren búsqueda, ambigüedad, identificadores, valor monetario, fechas, documentos de otro contrato, paginación, límites de destino, regla 2025/2026, fuentes históricas, asociación al proceso, ZIP, límites de la sección, generación Word y flujo de Streamlit.
+
+Validación con documentos reales del 2 de octubre de 2026 (muestra, no garantía de cobertura total):
+
+| Año | Contratos probados | Obligaciones extraídas por contrato | Soporte |
+| --- | ---: | --- | --- |
+| 2022 | 2 | Sin extracción automática en ambos casos | No se localizó una minuta con sección reconocible; requiere soporte o transcripción manual |
+| 2023 | 2 | 7 y 9 | Minutas del histórico |
+| 2024 | 2 | 6 y 7 | Minutas del histórico |
+| 2025 | 1 | 9 | Minuta |
+| 2026 | 2 | 7 y 7 | Estudios previos dentro de ZIP asociados al proceso |
+
+Se generaron certificados Word para los siete casos con extracción automática. El texto extraído se comparó con las secciones de origen y se comprobó que no incorporara modalidad de selección ni multas.
 
 Los archivos de consulta y pruebas reales se mantienen fuera del repositorio, al igual que los certificados generados y el PAR.
 
@@ -81,7 +95,8 @@ Los archivos de consulta y pruebas reales se mantienen fuera del repositorio, al
 app.py                    Interfaz de búsqueda, revisión y descarga
 src/contracts.py          Lectura CSV y selección del contrato
 src/network.py            Conexiones y límites de descarga
-src/documents.py          Consulta y selección de PDF en SECOP
+src/documents.py          Consulta histórica y selección por año en SECOP
+src/archives.py           Lectura limitada de PDF dentro de ZIP
 src/obligations.py        Extracción de obligaciones y páginas
 src/certificate.py        Generación Word en memoria
 src/workflow.py           Preparación y trazabilidad

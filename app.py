@@ -6,12 +6,12 @@ import re
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import streamlit as st
-from src.contracts import parse_csv, search, text
-from src.documents import document_url, ranked_pdfs
-from src.network import SourceError, download_oracle, download_pdf, allowed_url, DOCUMENT_HOST
+from src.contracts import parse_csv, search, text, contract_year
+from src.documents import document_url, ranked_sources, source_label, expected_source, document_kind
+from src.network import SourceError, download_oracle, allowed_url, DOCUMENT_HOST, DOCUMENT_DATASETS
 from src.obligations import extract
 from src.certificate import build_certificate, limpiar_nombre_archivo
-from src.workflow import prepare, fingerprint, audit
+from src.workflow import prepare, fingerprint, audit, extract_document
 
 
 def setting(key, default=''):
@@ -32,11 +32,14 @@ def uploaded_catalog(data):
 
 
 def reset_result():
-    for key in ('results', 'catalog', 'selected_key', 'prepared', 'output', 'output_state', 'extraction_token'):
+    for key in ('results', 'catalog', 'selected_key', 'selected_rule', 'prepared', 'output', 'output_state', 'extraction_token'):
         st.session_state.pop(key, None)
 
 
-def apply_extraction(prepared, pdf, name, url='', document=None):
+def apply_extraction(prepared, pdf, name, year, url='', document=None):
+    kind = document_kind(name)
+    if kind and kind != expected_source(year):
+        raise SourceError(f'Para el año {year}, cargue {source_label(year)}.')
     extraction = extract(pdf)
     return {**prepared, 'extraction': extraction, 'pdf': pdf,
             'document': document or {'nombre_archivo': name, 'url_descarga_documento': url}}
@@ -48,7 +51,7 @@ def main():
     st.caption('ATENEA · Busca el contrato, revisa las obligaciones y descarga el documento Word.')
     with st.sidebar:
         st.header('Fuente de información')
-        st.caption('La consulta usa la base contractual de Oracle y los documentos publicados en SECOP II desde 2025.')
+        st.caption('La consulta usa la base contractual de Oracle y los documentos actuales e históricos de SECOP II.')
         with st.expander('Configurar o actualizar la conexión'):
             par_url = st.text_input('Ruta PAR de Oracle', value=setting('ORACLE_PAR_URL'), type='password', key='par_url')
             upload = st.file_uploader('CSV alternativo (opcional)', type=['csv'], key='base_csv')
@@ -129,12 +132,26 @@ def main():
     st.caption('Datos del registro seleccionado en la base SECOP. Esta tabla no representa el historial completo de modificaciones.')
     if allowed_url(contract.fields['url'], DOCUMENT_HOST):
         st.link_button('Consultar proceso en SECOP II', contract.fields['url'])
+    year, year_origin = contract_year(contract)
+    if year is None:
+        year = st.number_input('Año del contrato (confirma para elegir el documento)', min_value=2000,
+                               max_value=2100, value=None, step=1, key='year_' + selection)
+        year_origin = 'confirmado por el usuario'
+    rule_context = (selection, year)
+    if st.session_state.get('selected_rule') != rule_context:
+        for key in ('prepared', 'output', 'output_state', 'extraction_token'):
+            st.session_state.pop(key, None)
+        st.session_state['selected_rule'] = rule_context
+    if year is None:
+        st.info('Indica el año del contrato para continuar.')
+        return
+    st.info(f'Contrato {year}: las obligaciones se extraen de {source_label(year)}. Año tomado de {year_origin}.')
     if st.button('Obtener obligaciones de SECOP', type='primary', key='prepare'):
         st.session_state.pop('output', None)
         st.session_state.pop('output_state', None)
         try:
-            with st.spinner('Localizando la minuta y extrayendo obligaciones…'):
-                st.session_state['prepared'] = prepare(contract)
+            with st.spinner(f'Consultando archivos actuales e históricos y buscando {source_label(year)}…'):
+                st.session_state['prepared'] = prepare(contract, year=year)
         except SourceError as e:
             st.session_state['prepared'] = {'documents': [], 'warnings': [str(e)], 'extraction': None, 'pdf': b'', 'document': None}
     prepared = st.session_state.get('prepared')
@@ -143,38 +160,41 @@ def main():
     st.subheader('2. Revisar datos y obligaciones')
     for warning in prepared['warnings']:
         st.warning(warning)
-    with st.expander('Cambiar el documento o cargar una minuta'):
-        pdfs = [row for _, row in ranked_pdfs(prepared['documents'], contract.fields['referencia'])]
-        if pdfs:
-            row = st.selectbox('PDF asociados al contrato', pdfs,
+    with st.expander(f'Cambiar el documento o cargar {source_label(year)}'):
+        sources = [row for score, row in ranked_sources(prepared['documents'], contract.fields['referencia'], year) if score >= 80]
+        if sources:
+            row = st.selectbox('Documentos PDF o ZIP según el año del contrato', sources,
                 format_func=lambda r: f'{r.get("nombre_archivo")} · ID {r.get("id_documento")} · {r.get("fecha_carga", "")[:10]}', key='pdf_select_' + selection)
-            if st.button('Extraer de este PDF', key='extract_selected'):
+            if st.button('Extraer de este documento', key='extract_selected'):
                 try:
                     with st.spinner('Leyendo el documento…'):
-                        pdf = download_pdf(document_url(row))
-                        prepared = apply_extraction(prepared, pdf, row['nombre_archivo'], document_url(row), row)
+                        prepared = {**prepared, **extract_document(row, year)}
                     st.session_state['prepared'] = prepared
                 except SourceError as e:
                     st.error(str(e))
-        manual_pdf = st.file_uploader('Minuta PDF alternativa', type=['pdf'], key='manual_' + selection)
+        manual_pdf = st.file_uploader(f'PDF alternativo: {source_label(year)}', type=['pdf'], key='manual_' + selection)
         if st.button('Extraer del PDF cargado', disabled=manual_pdf is None, key='extract_uploaded'):
             try:
-                prepared = apply_extraction(prepared, manual_pdf.getvalue(), manual_pdf.name)
+                prepared = apply_extraction(prepared, manual_pdf.getvalue(), manual_pdf.name, year)
                 st.session_state['prepared'] = prepared
             except SourceError as e:
                 st.error(str(e))
-        st.caption('También puedes transcribir las obligaciones en el campo de revisión. Quedarán registradas como edición manual.')
+        st.caption(f'También puedes transcribir las obligaciones de {source_label(year)} en el campo de revisión. Quedarán registradas como edición manual.')
     extraction = prepared['extraction']
     document = prepared['document'] or {}
     source_name = document.get('nombre_archivo', 'Transcripción manual')
     source_url = document_url(document)
     pdf_sha = hashlib.sha256(prepared['pdf']).hexdigest() if prepared['pdf'] else ''
-    token = fingerprint([selection, st.session_state['catalog'].sha256, pdf_sha, source_name])
+    token = fingerprint([selection, year, st.session_state['catalog'].sha256, pdf_sha, source_name])
     if st.session_state.get('extraction_token') != token:
         st.session_state.pop('output', None)
         st.session_state['extraction_token'] = token
     if extraction:
         st.success(f'{len(extraction.obligations)} obligaciones localizadas en {source_name}.')
+        if document.get('_archivo_zip'):
+            st.caption(f'PDF extraído de: {document["_archivo_zip"]}.')
+        if document.get('_dataset'):
+            st.caption(f'Fuente SECOP: {DOCUMENT_DATASETS.get(document["_dataset"], document["_dataset"])} · vinculado al {document.get("_asociacion", "contrato")}.')
         for warning in extraction.warnings:
             st.warning(warning)
         with st.expander('Ver evidencia y páginas de origen'):
@@ -198,7 +218,7 @@ def main():
     if not extraction and manual_source.strip():
         source_name = manual_source.strip()
     logo_bytes = logo.getvalue() if logo else None
-    output_state = fingerprint([fields, obligations, issued, signer, role, source_name, source_url, pdf_sha,
+    output_state = fingerprint([fields, obligations, issued, signer, role, source_name, source_url, pdf_sha, year,
                                 hashlib.sha256(logo_bytes).hexdigest() if logo_bytes else ''])
     if st.session_state.get('output_state') != output_state:
         st.session_state.pop('output', None)
@@ -207,7 +227,7 @@ def main():
         try:
             content = build_certificate(fields, obligations, issued, signer, role, source_name, source_url, logo_bytes)
             trace = audit(contract, st.session_state['catalog'].sha256, fields, obligations, original_items,
-                          source_name, pdf_sha, source_url, issued, signer, role)
+                          source_name, pdf_sha, source_url, issued, signer, role, year=year, document=document)
             st.session_state['output'] = {'docx': content, 'audit': json.dumps(trace, ensure_ascii=False, indent=2).encode('utf-8')}
             st.session_state['output_state'] = output_state
         except SourceError as e:
