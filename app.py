@@ -6,7 +6,7 @@ import re
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import streamlit as st
-from src.contracts import parse_csv, search
+from src.contracts import parse_csv, search, text
 from src.documents import document_url, ranked_pdfs
 from src.network import SourceError, download_oracle, download_pdf, allowed_url, DOCUMENT_HOST
 from src.obligations import extract
@@ -109,6 +109,24 @@ def main():
             st.session_state.pop(key, None)
         st.session_state['selected_key'] = selection
     st.write(contract.fields['objeto'])
+    st.subheader('Observaciones del contrato')
+    observations = text(contract.raw.get('observaciones_inferido'))
+    if observations:
+        # Conservar el texto de la fuente sin interpretar enlaces ni formato Markdown.
+        st.warning(re.sub(r'([\\`*_{}\[\]()#+\-.!|<>~$])', r'\\\1', observations))
+    else:
+        st.info('Sin observaciones reportadas en la base para este contrato.')
+    st.caption('Fuente: observaciones_inferido de la base SECOP en Oracle.')
+    st.subheader('Modificación reportada')
+    modification_columns = [
+        ('Tipo de modificación', 'tipo_modificacion'),
+        ('Identificador', 'identificador_modificacion (modificaciones)'),
+        ('Estado', 'estado_modificacion (modificaciones)'),
+        ('Fecha de aprobación', 'fecha_de_aprobacion (modificaciones)'),
+    ]
+    st.dataframe([{label: text(contract.raw.get(column)) or 'Sin información'
+                   for label, column in modification_columns}], hide_index=True)
+    st.caption('Datos del registro seleccionado en la base SECOP. Esta tabla no representa el historial completo de modificaciones.')
     if allowed_url(contract.fields['url'], DOCUMENT_HOST):
         st.link_button('Consultar proceso en SECOP II', contract.fields['url'])
     if st.button('Obtener obligaciones de SECOP', type='primary', key='prepare'):

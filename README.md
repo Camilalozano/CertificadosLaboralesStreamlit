@@ -5,7 +5,7 @@ Aplicativo Streamlit para buscar contratos por número o palabras del objeto, re
 ## Uso
 
 1. Ingresa una referencia completa, un número corto o palabras del objeto y pulsa **Buscar contrato**.
-2. Si hay varias coincidencias, selecciona la referencia, el contratista y el ID correctos. Los duplicados se muestran por separado.
+2. Si hay varias coincidencias, selecciona la referencia, el contratista y el ID correctos. Los duplicados se muestran por separado. Al seleccionar el contrato aparecen sus observaciones y la tabla de modificación reportada.
 3. Pulsa **Obtener obligaciones de SECOP**. La aplicación consulta los documentos asociados al `id_contrato` exacto y prioriza minutas y clausulados.
 4. Revisa los datos, el documento elegido y las obligaciones con su página de origen. Puedes seleccionar otro PDF, cargar una minuta o transcribir obligaciones. Las correcciones quedan en la trazabilidad.
 5. Pulsa **Generar certificado Word** y después **Descargar certificado Word**. También puedes descargar la trazabilidad JSON y el PDF consultado.
@@ -49,6 +49,7 @@ La configuración también admite `ORACLE_PAR_URL`, `FIRMANTE` y `CARGO_FIRMANTE
 ## Fuentes y alcance
 
 - **Base Oracle:** referencia contractual, ID SECOP, objeto, contratista, identificación, valor, fechas, plazo, estado y URL del proceso. Se leen como texto para preservar identificadores y ceros iniciales.
+- **Observaciones y modificación:** antes de obtener las obligaciones, se muestra una alerta con el texto completo de `observaciones_inferido` y una tabla con `tipo_modificacion`, `identificador_modificacion (modificaciones)`, `estado_modificacion (modificaciones)` y `fecha_de_aprobacion (modificaciones)`. Si no hay observaciones se informa su ausencia; los campos vacíos de la tabla muestran **Sin información**. Los valores corresponden a la fila seleccionada, no a un historial completo. Son información de consulta en pantalla y no se agregan al certificado Word.
 - **Documentos SECOP:** [Archivos Descarga Desde 2025, dmgg-8hin](https://www.datos.gov.co/Estad-sticas-Nacionales/SECOP-II-Archivos-Descarga-Desde-2025/dmgg-8hin). API: `https://www.datos.gov.co/resource/dmgg-8hin.json`. Consulta paginada con `n_mero_de_contrato = id_contrato`.
 - Las obligaciones no son una columna de esta fuente: se extraen del texto de los PDF descargados. La aplicación conserva el documento, su hash SHA-256 y la página de cada obligación.
 - Los contratos anteriores a 2025 pueden no tener documentos en este conjunto. Se permite cargar una minuta alternativa. No se consulta automáticamente un conjunto histórico diferente.
