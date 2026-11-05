@@ -32,7 +32,7 @@ def list_documents(contract_id, dataset='dmgg-8hin', process=None):
     raise SourceError('El contrato supera 5.000 documentos. Refine la consulta en SECOP.')
 
 
-def lookup_documents(contract_id):
+def lookup_documents(contract_id, process=None):
     """Consulta históricos y documentos precontractuales del proceso vinculado."""
     rows, warnings, seen = [], [], set()
     def collect(process=None):
@@ -53,11 +53,31 @@ def lookup_documents(contract_id):
     collect()
     processes = {row.get('proceso') for row in rows
                  if re.fullmatch(r'CO1\.[A-Z]+\.\d+', str(row.get('proceso', '')))}
+    if process and re.fullmatch(r'CO1\.BDOS\.\d+', str(process)):
+        processes.add(process)
     if len(processes) == 1:
         collect(processes.pop())
     elif len(processes) > 1:
         warnings.append('Hay varios procesos asociados al contrato. No se añadieron documentos sin ID contractual; cargue el soporte correcto.')
     return rows, warnings
+
+
+def resolve_process(contract):
+    """Vincular el proceso por ID contractual exacto, aun sin documentos publicados."""
+    for key in ('proceso_de_compra (contratos_electronicos)', 'proceso_de_compra'):
+        value = str(contract.raw.get(key, '')).strip().upper()
+        if re.fullmatch(r'CO1\.BDOS\.\d+', value):
+            return value
+    cid = contract.fields['id_contrato'].upper()
+    if not re.fullmatch(r'CO1\.PCCNTR\.\d+', cid):
+        raise SourceError('El contrato no tiene un ID SECOP válido.')
+    rows = api_rows({'id_contrato': cid, '$select': 'id_contrato,proceso_de_compra',
+                     '$limit': 2}, dataset='jbjy-vk9h')
+    values = {r.get('proceso_de_compra') for r in rows if r.get('id_contrato') == cid
+              and re.fullmatch(r'CO1\.BDOS\.\d+', str(r.get('proceso_de_compra', '')))}
+    if len(values) != 1:
+        raise SourceError('No se pudo establecer un único proceso para el ID contractual. Se consultarán los documentos ligados directamente al contrato.')
+    return values.pop()
 
 
 def document_url(row):
@@ -115,3 +135,4 @@ def ranked_pdfs(rows, reference):
 
 def has_modifications(rows):
     return any(any(word in fold(row.get('nombre_archivo', '')) for word in ('MODIFICACION', 'OTROSI', 'ADICION', 'CESION')) for row in rows)
+

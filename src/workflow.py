@@ -3,7 +3,7 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from .contracts import contract_year
-from .documents import lookup_documents, ranked_sources, document_url, has_modifications, source_label
+from .documents import lookup_documents, ranked_sources, document_url, has_modifications, source_label, resolve_process
 from .archives import source_pdfs
 from .network import SourceError
 from .obligations import extract
@@ -26,11 +26,22 @@ def extract_document(row, year):
     raise SourceError(failures[-1] if failures else 'No se encontró un PDF legible con obligaciones específicas.')
 
 
-def prepare(contract, year=None):
+def prepare(contract, year=None, documents=None):
     year = year if year is not None else contract_year(contract)[0]
     if year is None:
         raise SourceError('Confirme el año del contrato para aplicar la regla documental.')
-    rows, warnings = lookup_documents(contract.fields['id_contrato'])
+    if documents is None:
+        process_warning = []
+        try:
+            process = resolve_process(contract)
+        except SourceError as error:
+            process = None
+            process_warning.append(str(error))
+        rows, warnings = lookup_documents(contract.fields['id_contrato'], process=process)
+        warnings = process_warning + warnings
+    else:
+        rows, warnings = documents
+        warnings = list(warnings)
     if has_modifications(rows):
         warnings.append('SECOP contiene documentos de modificación. Revise si cambiaron las obligaciones, el plazo o el contratista. La extracción corresponde al documento seleccionado.')
     result = {'documents': rows, 'warnings': warnings, 'extraction': None, 'pdf': b'', 'document': None}
@@ -41,7 +52,7 @@ def prepare(contract, year=None):
     # El ranking solo prioriza documentos vinculados al ID contractual exacto.
     failures = []
     for score, row in ranked_sources(rows, contract.fields['referencia'], year):
-        if score < 80 or len(attempted) >= 5:
+        if score < 80:
             continue
         url = document_url(row)
         if url in attempted:
@@ -82,3 +93,4 @@ def audit(contract, catalog_sha, fields, obligations, original_items, source, so
         'fecha_documento': str(issued_on), 'firmante': signer, 'cargo': role,
         'estado': 'Borrador para revisión y firma',
     }
+

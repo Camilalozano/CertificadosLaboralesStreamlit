@@ -63,5 +63,24 @@ class AppTests(unittest.TestCase):
         self.assertTrue(any('Configura ORACLE_PAR_URL' in x.value for x in at.info))
         self.assertFalse(at.exception)
 
+    @patch('src.documents.resolve_process', return_value='CO1.BDOS.42')
+    @patch('src.documents.lookup_documents')
+    @patch('src.secop_archive.build_archive')
+    def test_consult_inventory_and_archive(self, archive, listing, process):
+        listing.return_value = ([{'nombre_archivo': 'EP.pdf', 'id_documento': '42',
+                                 'extensi_n': 'pdf', 'proceso': 'CO1.BDOS.42'}], [])
+        archive.return_value = ('SECOP.zip', b'PK-test', [{'estado': 'Descargado'}])
+        at = self.find(self.start())
+        at.button(key='consult_process').click().run()
+        at.button(key='inventory').click().run()
+        self.assertTrue(at.session_state['show_inventory'])
+        at.button(key='archive').click().run()
+        self.assertFalse(at.exception)
+        self.assertTrue(any(x.label == 'Guardar ZIP de documentos SECOP' for x in at.get('download_button')))
+        self.find(at, 'ATENEA-003-2026')
+        self.assertNotIn('secop_zip', at.session_state)
+        self.assertNotIn('secop', at.session_state)
+
 
 if __name__ == '__main__': unittest.main()
+

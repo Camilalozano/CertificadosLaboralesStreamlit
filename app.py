@@ -7,7 +7,8 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 import streamlit as st
 from src.contracts import parse_csv, search, text, contract_year
-from src.documents import document_url, ranked_sources, source_label, expected_source, document_kind
+from src.documents import document_url, ranked_sources, source_label, expected_source, document_kind, lookup_documents, resolve_process
+from src.secop_archive import build_archive
 from src.network import SourceError, download_oracle, allowed_url, DOCUMENT_HOST, DOCUMENT_DATASETS
 from src.obligations import extract
 from src.certificate import build_certificate, limpiar_nombre_archivo
@@ -32,7 +33,7 @@ def uploaded_catalog(data):
 
 
 def reset_result():
-    for key in ('results', 'catalog', 'selected_key', 'selected_rule', 'prepared', 'output', 'output_state', 'extraction_token'):
+    for key in ('results', 'catalog', 'selected_key', 'selected_rule', 'prepared', 'output', 'output_state', 'extraction_token', 'secop', 'secop_zip', 'show_inventory'):
         st.session_state.pop(key, None)
 
 
@@ -108,7 +109,7 @@ def main():
         return
     contract = by_key[selection]
     if st.session_state.get('selected_key') != selection:
-        for key in ('prepared', 'output', 'output_state', 'extraction_token'):
+        for key in ('prepared', 'output', 'output_state', 'extraction_token', 'secop', 'secop_zip', 'show_inventory'):
             st.session_state.pop(key, None)
         st.session_state['selected_key'] = selection
     st.write(contract.fields['objeto'])
@@ -131,7 +132,49 @@ def main():
                    for label, column in modification_columns}], hide_index=True)
     st.caption('Datos del registro seleccionado en la base SECOP. Esta tabla no representa el historial completo de modificaciones.')
     if allowed_url(contract.fields['url'], DOCUMENT_HOST):
-        st.link_button('Consultar proceso en SECOP II', contract.fields['url'])
+        st.link_button('Abrir proceso en SECOP II', contract.fields['url'])
+    if st.button('Consultar proceso', key='consult_process'):
+        for key in ('secop_zip', 'prepared', 'output', 'output_state', 'extraction_token'):
+            st.session_state.pop(key, None)
+        warnings = []
+        try:
+            with st.spinner('Consultando el proceso y sus documentos en SECOP…'):
+                try:
+                    process = resolve_process(contract)
+                except SourceError as error:
+                    process = None
+                    warnings.append(str(error))
+                rows, notices = lookup_documents(contract.fields['id_contrato'], process=process)
+                st.session_state['secop'] = (rows, warnings + notices)
+        except SourceError as error:
+            st.session_state['secop'] = ([], warnings + [str(error)])
+    secop = st.session_state.get('secop')
+    if secop is not None:
+        rows, warnings = secop
+        st.caption(f'{len(rows)} documentos encontrados en las fuentes públicas de SECOP. La publicación en Datos Abiertos puede tener rezago.')
+        for warning in warnings:
+            st.warning(warning)
+        if st.button('Ver inventario de documentos SECOP', key='inventory'):
+            st.session_state['show_inventory'] = not st.session_state.get('show_inventory', False)
+        if st.session_state.get('show_inventory'):
+            st.dataframe([{'Archivo': r.get('nombre_archivo', ''), 'Tipo': r.get('extensi_n', ''),
+                           'Fecha': r.get('fecha_carga', ''), 'ID': r.get('id_documento', ''),
+                           'Proceso': r.get('proceso', ''), 'Asociación': r.get('_asociacion', ''),
+                           'Fuente': DOCUMENT_DATASETS.get(r.get('_dataset'), ''), 'Descarga': document_url(r)}
+                          for r in rows], hide_index=True)
+        if st.button('Descargar todos los documentos de SECOP', key='archive', disabled=not rows):
+            try:
+                with st.spinner('Descargando archivos y preparando el inventario…'):
+                    st.session_state['secop_zip'] = build_archive(rows, contract.fields['referencia'])
+            except SourceError as error:
+                st.error(str(error))
+        bundle = st.session_state.get('secop_zip')
+        if bundle:
+            name, data, inventory = bundle
+            failed = sum(item['estado'] != 'Descargado' for item in inventory)
+            if failed:
+                st.warning(f'{failed} archivos no se pudieron descargar. El inventario dentro del ZIP detalla cada resultado.')
+            st.download_button('Guardar ZIP de documentos SECOP', data, name, 'application/zip')
     year, year_origin = contract_year(contract)
     if year is None:
         year = st.number_input('Año del contrato (confirma para elegir el documento)', min_value=2000,
@@ -151,7 +194,8 @@ def main():
         st.session_state.pop('output_state', None)
         try:
             with st.spinner(f'Consultando archivos actuales e históricos y buscando {source_label(year)}…'):
-                st.session_state['prepared'] = prepare(contract, year=year)
+                options = {'documents': secop} if secop is not None else {}
+                st.session_state['prepared'] = prepare(contract, year=year, **options)
         except SourceError as e:
             st.session_state['prepared'] = {'documents': [], 'warnings': [str(e)], 'extraction': None, 'pdf': b'', 'document': None}
     prepared = st.session_state.get('prepared')
@@ -243,3 +287,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

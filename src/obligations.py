@@ -56,13 +56,17 @@ def extract(data):
     pages = pdf_pages(data)
     page_texts = []
     for n, page in enumerate(pages, 1):
+        # El formato 2026 coloca aviso legal y encabezado antes del folio.
+        header = re.match(r'(?is)\A.{0,1000}?Formato\s+de\s+Estudios\s+y\s+Documentos\s+Previos.{0,500}?P[aá]gina\s+\d+\s+de\s+\d+[^\S\n]*\n', page)
+        if header:
+            page = page[header.end():]
         # Retirar el folio aislado en los bordes, sin tocar la numeración de obligaciones.
         page = re.sub(rf'\A\s*{n}\s*\n|\n\s*{n}\s*\Z', '', page)
         page = re.sub(r'(?im)^\s*(?:Página\s+\d+\s+de\s+\d+|www\.agenciaatenea[^\n]*|Cr\.?\s*10[^\n]*|Carrera\s+10[^\n]*|PBX\s*:[^\n]*|atencionalciudadano@agenciaatenea\.gov\.co[^\n]*|Información:\s*Línea\s*195[^\n]*)\s*$', '', page)
         page_texts.append(f'[[PAGE:{n}]]\n{page}')
     joined = '\n'.join(page_texts)
     normalized, offsets = folded_offsets(joined)
-    heading = re.compile(r'OBLIGACIONES\s+ESPECIFICAS(?:\s+DEL\s+CONTRATISTA)?\s*[:.\-]?')
+    heading = re.compile(r'OBLIGACIONES\s+ESPECIFICAS(?:\s+(?:DEL|A\s+CARGO\s+DEL)\s+CONTRATISTA)?\s*[:.\-]?')
     sections = []
     for start in heading.finditer(normalized):
         tail = normalized[start.end():]
@@ -72,23 +76,29 @@ def extract(data):
         # Una cláusula distinta cierra la sección, nunca se añade a la última obligación.
         ends = [m.start() for pattern in [r'\bCLAUSULA\s+(?:PRIMERA|SEGUNDA|TERCERA|CUARTA|QUINTA|SEXTA|SEPTIMA|OCTAVA|NOVENA|DECIMA|[IVX]+)\b\s*[:.\-–—]',
                 r'\bOBLIGACIONES\s+(?:ESPECIFICAS\s+)?DE\s+(?:LA\s+CONTRATANTE|LA\s+AGENCIA|LA\s+ENTIDAD)',
-                r'\b(?:C|D)\)\s+OBLIGACIONES', r'\bPARAGRAFO\s*[:.\-]',
+                r'(?m)^\s*(?:[A-Z][.)]\s*)?OBLIGACIONES\s+GENERALES\b',
+                r'\b(?:C|D)[.)]\s+OBLIGACIONES', r'\bPARAGRAFO\s*[:.\-]',
                 r'(?m)^\s*(?:(?:\d+(?:\.\d+)*[.)]?|[A-Z][.)])\s+)?(?:MODALIDAD\s+DE\s+SELECCION|VALOR\s+(?:DEL|ESTIMADO)|FORMA\s+DE\s+PAGO|ANALISIS\s+(?:DEL|DE)|GARANTIAS|PRODUCTOS\s+ESPERADOS|PLAZO\s+DE\s+EJECUCION)\b']
                 if (m := re.search(pattern, tail))]
         end = start.end() + (min(ends) if ends else min(len(tail), 35000))
         begin_orig = offsets[start.end()] if start.end() < len(offsets) else len(joined)
         end_orig = offsets[end] if end < len(offsets) else len(joined)
         section = joined[begin_orig:end_orig]
-        markers = list(re.finditer(r'(?<![\d\w])(\d{1,2})[.)]\s+(?=[A-ZÁÉÍÓÚÜÑ])', section))
+        # Aceptar 1., 1), (1) y numeración de sección como 2.1 / 2.2.
+        markers = list(re.finditer(r'(?<![\d\w.])\(?(?P<prefix>(?:\d{1,2}\.)*)(?P<number>\d{1,2})(?:[.)]|(?<=\d)(?=\s))\s+(?=[A-Za-zÁÉÍÓÚÜÑáéíóúüñ])', section))
         selected = []
-        expected = 1
+        prefix = None
         for marker in markers:
-            if int(marker.group(1)) == expected:
+            number = int(marker.group('number'))
+            if prefix is None and number == 1:
+                prefix = marker.group('prefix')
+            if prefix is not None and marker.group('prefix') == prefix and (not selected or number > int(selected[-1].group('number'))):
                 selected.append(marker)
-                expected += 1
         if not selected:
             continue
         warnings = []
+        if [int(m.group('number')) for m in selected] != list(range(1, len(selected) + 1)):
+            warnings.append('La numeración contiene saltos. Compare las obligaciones con el PDF de origen.')
         if not ends:
             warnings.append('No se identificó el cierre de la sección. Revise el final de la última obligación.')
         obligations = []
@@ -98,7 +108,7 @@ def extract(data):
             if not value:
                 continue
             prior = list(re.finditer(r'\[\[PAGE:(\d+)\]\]', joined[:begin_orig+marker.start()]))
-            obligations.append({'numero': int(marker.group(1)), 'texto': value,
+            obligations.append({'numero': int(marker.group('number')), 'texto': value,
                                 'pagina': int(prior[-1].group(1)) if prior else 1})
         if any(re.search(r'(?:^|\s)\d{1,2}[.)]\s+[A-ZÁÉÍÓÚÑ]', o['texto']) for o in obligations):
             warnings.append('La numeración contiene saltos o subapartados. Compare la extracción con el PDF.')
@@ -109,3 +119,4 @@ def extract(data):
     if len(sections) > 1:
         result.warnings.append('El PDF contiene varias secciones candidatas. Verifique cuál corresponde al contratista.')
     return result
+

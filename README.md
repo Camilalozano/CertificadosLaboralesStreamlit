@@ -102,3 +102,26 @@ src/certificate.py        Generación Word en memoria
 src/workflow.py           Preparación y trazabilidad
 tests/                    Pruebas unitarias y de interfaz
 ```
+
+# Consulta documental SECOP (actualización noviembre de 2026)
+
+La consulta incluye el histórico oficial de 2025 (`h4m3-b4e2`), separado del de
+2026 (`dmgg-8hin`), y los históricos anteriores. El proceso de compra se obtiene
+por el ID contractual exacto en Contratos Electrónicos (`jbjy-vk9h`) cuando no
+está en el CSV; así se recuperan documentos del proceso incluso sin archivos
+ligados directamente al contrato. Se excluyen archivos ligados a otro contrato.
+
+- **Consultar proceso** recupera el inventario y muestra consultas incompletas.
+- **Ver inventario de documentos SECOP** muestra archivos, origen y enlaces.
+- **Descargar todos los documentos de SECOP** prepara un ZIP y un manifiesto con
+  el resultado y SHA-256 de cada descarga. Límites: 100 archivos, 50 MB por archivo
+  y 100 MB en total. Los fallos se reportan; no se presenta una descarga parcial
+  como completa. Los ZIP originales se conservan sin expandir.
+- **Obtener obligaciones de SECOP** busca estudios previos desde 2026 y minuta o
+  clausulado hasta 2025, conservando archivo, texto y página. Acepta numeración
+  simple y jerárquica. No completa texto ausente ni convierte imágenes mediante
+  OCR: los PDF escaneados requieren una copia con texto reconocible.
+
+La disponibilidad depende de lo publicado en Datos Abiertos y puede tener rezago
+frente al portal SECOP. Los documentos de modificaciones requieren revisión.
+

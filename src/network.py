@@ -11,7 +11,8 @@ MAX_CSV_BYTES = 50 * 1024 * 1024
 MAX_PDF_BYTES = 20 * 1024 * 1024
 MAX_ZIP_BYTES = 50 * 1024 * 1024
 DOCUMENT_DATASETS = {
-    'dmgg-8hin': 'Desde 2025',
+    'dmgg-8hin': 'Histórico 2026',
+    'h4m3-b4e2': 'Histórico 2025',
     'nbae-kzan': 'Histórico 2024',
     '3skv-9na7': 'Histórico 2023',
     'kgcd-kt7i': 'Histórico 2022',
@@ -70,7 +71,7 @@ def download_oracle(url):
 
 
 def api_rows(params, dataset='dmgg-8hin'):
-    if dataset not in DOCUMENT_DATASETS:
+    if dataset not in {*DOCUMENT_DATASETS, 'jbjy-vk9h'}:
         raise SourceError('La fuente documental de SECOP no está configurada.')
     endpoint = f'https://www.datos.gov.co/resource/{dataset}.json'
     data = read_url(endpoint + '?' + urlencode(params), 8 * 1024 * 1024, 'Documentos SECOP')
@@ -99,3 +100,4 @@ def download_zip(url):
     if not data.startswith(b'PK'):
         raise SourceError('SECOP no devolvió un archivo ZIP válido.')
     return data
+

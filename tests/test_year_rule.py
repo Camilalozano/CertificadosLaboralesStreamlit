@@ -88,9 +88,10 @@ class YearRuleTests(unittest.TestCase):
         self.assertEqual(rows, [])
         self.assertTrue(all('incompleta' in w for w in warnings))
 
+    @patch('src.workflow.resolve_process', return_value='CO1.BDOS.123')
     @patch('src.workflow.extract_document')
     @patch('src.workflow.lookup_documents')
-    def test_2026_never_automatically_falls_back_to_minuta(self, listing, extraction):
+    def test_2026_never_automatically_falls_back_to_minuta(self, listing, extraction, process):
         c = parse_csv(csv_fixture()).contracts[1]
         listing.return_value = ([{'nombre_archivo': 'MINUTA.pdf', 'extensi_n': 'pdf'}], [])
         result = prepare(c)
@@ -145,3 +146,4 @@ class YearRuleTests(unittest.TestCase):
 
 
 if __name__ == '__main__': unittest.main()
+
