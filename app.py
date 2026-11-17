@@ -52,9 +52,9 @@ def main():
     st.caption('ATENEA · Busca el contrato, revisa las obligaciones y descarga el documento Word.')
     with st.sidebar:
         st.header('Fuente de información')
-        st.caption('La consulta usa la base contractual de Oracle y los documentos actuales e históricos de SECOP II.')
+        st.caption('La consulta usa la base contractual SECOP y los documentos actuales e históricos de SECOP II.')
         with st.expander('Configurar o actualizar la conexión'):
-            par_url = st.text_input('Ruta PAR de Oracle', value=setting('ORACLE_PAR_URL'), type='password', key='par_url')
+            par_url = st.text_input('URL de la base SECOP', value=setting('SECOP_CSV_URL') or setting('ORACLE_PAR_URL'), type='password', key='par_url')
             upload = st.file_uploader('CSV alternativo (opcional)', type=['csv'], key='base_csv')
             if st.button('Actualizar base', key='refresh'):
                 oracle_catalog.clear()
@@ -80,7 +80,7 @@ def main():
             st.info('Ingresa el número del contrato o palabras de su objeto.')
             return
         if not upload_data and not par_url:
-            st.info('Configura ORACLE_PAR_URL en los secretos de Streamlit o ingresa la ruta PAR en el panel lateral.')
+            st.info('Configura SECOP_CSV_URL en los secretos de Streamlit o ingresa la URL en el panel lateral.')
             return
         try:
             with st.spinner('Consultando la base contractual…'):
@@ -120,7 +120,7 @@ def main():
         st.warning(re.sub(r'([\\`*_{}\[\]()#+\-.!|<>~$])', r'\\\1', observations))
     else:
         st.info('Sin observaciones reportadas en la base para este contrato.')
-    st.caption('Fuente: observaciones_inferido de la base SECOP en Oracle.')
+    st.caption('Fuente: observaciones_inferido de la base SECOP.')
     st.subheader('Modificación reportada')
     modification_columns = [
         ('Tipo de modificación', 'tipo_modificacion'),
