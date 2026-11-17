@@ -22,14 +22,14 @@ El formato conserva la estructura del generador original de ATENEA. La salida es
 En **Advanced settings → Secrets**, configura:
 
 ```toml
-ORACLE_PAR_URL = "PEGA_AQUI_LA_RUTA_PAR_DEL_CSV_MAESTRO"
+SECOP_CSV_URL = "PEGA_AQUI_LA_URL_SAS_DEL_CSV_MAESTRO"
 FIRMANTE = ""
 CARGO_FIRMANTE = "Subgerencia de Gestión Administrativa"
 ```
 
-Utiliza el enlace PAR suministrado por Camila al objeto `analisis_contratacion/gold_exports/tabla_maestra_completa/tabla_maestra_completa.csv`. El código no publica el token PAR ni copia el CSV a GitHub. En el entorno local de trabajo ya está configurado en `.streamlit/secrets.toml`, excluido del repositorio. Debes trasladarlo al panel de secretos al desplegar.
+Utiliza el enlace SAS de Azure suministrado por Camila al objeto `analisis_contratacion/gold_exports/tabla_maestra_completa/tabla_maestra_completa.csv`. El código no publica el token PAR ni copia el CSV a GitHub. En el entorno local de trabajo ya está configurado en `.streamlit/secrets.toml`, excluido del repositorio. Debes trasladarlo al panel de secretos al desplegar.
 
-Si vence el PAR, actualiza el secreto o ingresa una nueva ruta en el panel lateral. También puedes cargar temporalmente un CSV con las mismas columnas. El cache de la base dura una hora y el botón **Actualizar base** lo invalida.
+La configuración en Secrets persiste entre sesiones y reinicios. Si vence el enlace SAS, actualiza el secreto o ingresa una nueva ruta en el panel lateral. También puedes cargar temporalmente un CSV con las mismas columnas. El cache de la base dura una hora y el botón **Actualizar base** lo invalida.
 
 Documentación oficial: [despliegue y secretos en Streamlit](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/secrets-management).
 
@@ -44,11 +44,11 @@ python -m pip install -r requirements.txt
 python -m streamlit run app.py
 ```
 
-La configuración también admite `ORACLE_PAR_URL`, `FIRMANTE` y `CARGO_FIRMANTE` como variables de entorno. El secreto de Streamlit tiene prioridad cuando existe.
+La configuración también admite `SECOP_CSV_URL`, `ORACLE_PAR_URL` (compatibilidad con despliegues anteriores), `FIRMANTE` y `CARGO_FIRMANTE` como variables de entorno. El secreto de Streamlit tiene prioridad cuando existe.
 
 ## Fuentes y alcance
 
-- **Base Oracle:** referencia contractual, ID SECOP, objeto, contratista, identificación, valor, fechas, plazo, estado y URL del proceso. Se leen como texto para preservar identificadores y ceros iniciales.
+- **Base SECOP (Azure u Oracle):** referencia contractual, ID SECOP, objeto, contratista, identificación, valor, fechas, plazo, estado y URL del proceso. Se leen como texto para preservar identificadores y ceros iniciales.
 - **Observaciones y modificación:** antes de obtener las obligaciones, se muestra una alerta con el texto completo de `observaciones_inferido` y una tabla con `tipo_modificacion`, `identificador_modificacion (modificaciones)`, `estado_modificacion (modificaciones)` y `fecha_de_aprobacion (modificaciones)`. Si no hay observaciones se informa su ausencia; los campos vacíos de la tabla muestran **Sin información**. Los valores corresponden a la fila seleccionada, no a un historial completo. Son información de consulta en pantalla y no se agregan al certificado Word.
 - **Documentos SECOP:** se consultan [Desde 2025, dmgg-8hin](https://www.datos.gov.co/d/dmgg-8hin), [Histórico 2024, nbae-kzan](https://www.datos.gov.co/d/nbae-kzan), [Histórico 2023, 3skv-9na7](https://www.datos.gov.co/d/3skv-9na7), [Histórico 2022, kgcd-kt7i](https://www.datos.gov.co/d/kgcd-kt7i) y [Hasta 2021, f8va-cf4m](https://www.datos.gov.co/d/f8va-cf4m). Cada API sigue el patrón `https://www.datos.gov.co/resource/{dataset}.json`. Consulta paginada por `n_mero_de_contrato = id_contrato`, con deduplicación por documento.
 - **Estudios previos vinculados al proceso:** si los documentos del contrato identifican un solo `proceso`, también se consultan sus archivos precontractuales sin ID contractual. Los documentos asignados explícitamente a otro contrato se excluyen. Si alguna fuente falla, se informa que la consulta puede estar incompleta.
