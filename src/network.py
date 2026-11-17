@@ -6,6 +6,8 @@ from urllib.parse import urlencode, urlparse
 from urllib.request import Request, HTTPRedirectHandler, build_opener
 
 ORACLE_HOST = 'objectstorage.us-ashburn-1.oraclecloud.com'
+AZURE_HOST = 'salagodatosateneadev.blob.core.windows.net'
+AZURE_CSV_PATH = '/sandbox/analisis_contratacion/gold_exports/tabla_maestra_completa/tabla_maestra_completa.csv'
 DOCUMENT_HOST = 'community.secop.gov.co'
 MAX_CSV_BYTES = 50 * 1024 * 1024
 MAX_PDF_BYTES = 20 * 1024 * 1024
@@ -65,9 +67,11 @@ def read_url(url, limit, label, headers=None):
 
 
 def download_oracle(url):
-    if not allowed_url(url, ORACLE_HOST) or '/p/' not in urlparse(url).path:
-        raise SourceError('Configure una ruta PAR HTTPS válida de Oracle Object Storage.')
-    return read_url(url.strip(), MAX_CSV_BYTES, 'Base Oracle')
+    oracle = allowed_url(url, ORACLE_HOST) and '/p/' in urlparse(url).path
+    azure = allowed_url(url, AZURE_HOST, AZURE_CSV_PATH)
+    if not (oracle or azure):
+        raise SourceError('Configure una URL HTTPS válida de la base SECOP en Azure u Oracle.')
+    return read_url(url.strip(), MAX_CSV_BYTES, 'Base SECOP')
 
 
 def api_rows(params, dataset='dmgg-8hin'):
