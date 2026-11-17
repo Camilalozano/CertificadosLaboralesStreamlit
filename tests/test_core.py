@@ -110,6 +110,15 @@ class DocumentTests(unittest.TestCase):
             'CUENTA ATENEA-003-2025.pdf', 'MINUTA ATENEA-003-2025.pdf', 'MODIFICACION MINUTA ATENEA-003-2025.pdf'])]
         self.assertEqual(ranked_pdfs(rows, 'ATENEA-003-2025')[0][1]['id_documento'], '1')
 
+    @patch('src.network.read_url', return_value=b'csv')
+    def test_azure_master_download(self, read):
+        url = 'https://salagodatosateneadev.blob.core.windows.net/sandbox/analisis_contratacion/gold_exports/tabla_maestra_completa/tabla_maestra_completa.csv?sig=fictional'
+        self.assertEqual(download_oracle(url), b'csv')
+        self.assertEqual(read.call_args.args[0], url)
+        for bad in [url.replace('https:', 'http:'), url.replace('.net/', '.net.evil.test/'), url.replace('/sandbox/', '/other/')]:
+            with self.assertRaises(SourceError):
+                download_oracle(bad)
+
     def test_network_destination_limits(self):
         for url in ['http://localhost/data', 'https://objectstorage.us-ashburn-1.oraclecloud.com.evil.test/p/x']:
             with self.assertRaises(SourceError): download_oracle(url)
