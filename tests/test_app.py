@@ -60,7 +60,7 @@ class AppTests(unittest.TestCase):
         at.secrets['ORACLE_PAR_URL'] = ''
         at.run()
         self.find(at)
-        self.assertTrue(any('Configura ORACLE_PAR_URL' in x.value for x in at.info))
+        self.assertTrue(any('Configura SECOP_CSV_URL' in x.value for x in at.info))
         self.assertFalse(at.exception)
 
     @patch('src.documents.resolve_process', return_value='CO1.BDOS.42')
